@@ -1,6 +1,20 @@
 // AI收 x402 协议 + 八字计算 测试
 const crypto = require('crypto');
 const { calculateBazi } = require('../bazi');
+const config = require('../config');
+
+// 生成临时测试密钥对，注入到 config 以支持签名测试
+const { privateKey, publicKey } = crypto.generateKeyPairSync('rsa', {
+  modulusLength: 2048,
+  publicKeyEncoding: { type: 'spki', format: 'pem' },
+  privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+});
+config.alipay.privateKey = privateKey;
+config.alipay.alipayPublicKey = publicKey;
+config.alipay.appId = config.alipay.appId || 'TEST_APP_ID';
+config.alipay.sellerPid = config.alipay.sellerPid || '2088000000000000';
+config.isConfigured = true;
+
 const { generateOrderId, buildPaymentNeeded } = require('../alipay');
 
 let pass = 0, fail = 0;
@@ -53,7 +67,7 @@ console.log('\n--- 2. Payment-Needed header ---');
 console.log('\n--- 3. 签名字段排序 ---');
 {
   // 验证字段按字典序排列
-  const fields = ['amount', 'currency', 'goods_name', 'out_trade_no', 'pay_before', 'resource_id', 'seller_id', 'service_id'];
+  const fields = ['amount', 'currency', 'goods_name', 'out_trade_no', 'pay_before', 'resource_id', 'seller_unique_id', 'service_id'];
   const sorted = [...fields].sort();
   for (let i = 0; i < fields.length; i++) {
     eq(fields[i], sorted[i], `字段 ${i} 顺序: ${sorted[i]}`);

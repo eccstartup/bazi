@@ -51,6 +51,12 @@ app.post(bp + '/query', async (req, res) => {
     const paymentProof = req.headers['payment-proof'];
 
     if (!paymentProof) {
+      if (!config.isConfigured) {
+        // 未配置支付宝（本地开发模式）：直接返回结果
+        console.warn('[x402] Alipay not configured, returning result without payment');
+        const data = buildResult(name || '用户', gender || '男', y, mo, d, h, mi, s);
+        return res.json({ code: 0, message: 'success', data });
+      }
       // 未支付：返回 402 + Payment-Needed header
       const orderNo = generateOrderId();
       const paymentNeeded = buildPaymentNeeded(orderNo, config.baziPrice, config.serviceId);
