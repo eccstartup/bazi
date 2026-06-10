@@ -1,59 +1,101 @@
-# 🔮 AI 八字排盘 - x402 支付模式
+# 🔮 八字排盘服务 (Alipay AI收 x402 协议)
 
-基于支付宝 AI 支付技能的八字查询服务。
+基于 Node.js/Express 构建的生辰八字排盘与命运查询服务，深度集成支付宝最新的 **AI收 (x402) 协议**，专为 AI 智能体 (AI Agents) 打造原生无感支付体验。
+
+---
+
+## 🔄 AI收 x402 支付与验证流程
+
+本项目不再使用传统的网页跳转或轮询，而是采用完全基于 HTTP Header 交互的同步 x402 协议：
 
 ```
-POST /v1/bazi/query   →   402  { payment_url }
-GET  /v1/bazi/pay/xxx →   200  { PAID }
-GET  /v1/bazi/result/xxx → 200  { 八字数据 }
+1. Agent 发起生辰信息查询
+   POST /v1/bazi/query  (无凭证)
+       ↓
+2. 服务端拦截，返回付费账单
+   HTTP 402 Payment Required 
+   Header [Payment-Needed]: Base64URL(账单数据)
+       ↓
+3. Agent 调用支付宝 AI 钱包 (AI Pay) 自动完成扣款
+   获取支付凭证 [Payment-Proof] 密文
+       ↓
+4. Agent 携带凭证重试原请求
+   POST /v1/bazi/query
+   Header [Payment-Proof]: Base64(凭证数据)
+       ↓
+5. 服务端通过支付宝 API 验证成功，交付资源
+   HTTP 200 OK + 八字结果 JSON
 ```
 
-## 快速开始
+---
+
+## 🚀 快速开始
+
+### 1. 启动服务
 
 ```bash
-cd /Users/eccstartup/code/codex/alipay
-node app.js
-# http://localhost:3000/v1/bazi/health
+# 安装依赖
+npm install
+
+# 启动开发服务器（默认端口 3000）
+npm run dev
 ```
+本地访问健康检查接口以确认启动：[http://localhost:3000/v1/bazi/health](http://localhost:3000/v1/bazi/health)
 
-演示模式，无需任何配置，支付直接返回成功。
+> 💡 **本地开发模式**：在未配置支付宝环境变量时，服务将处于本地开发模式。此时未支付查询直接返回 402，而在带上任意 `Payment-Proof`（甚至裸凭证）重新请求时，服务将跳过支付宝网关校验直接返回排盘结果，便于您测试业务逻辑。
 
-## 测试
+### 2. 运行测试
+
+本项目包含完整的 API 路由逻辑与八字计算排盘引擎测试用例：
 
 ```bash
-node test_x402.js   # x402 全链路 37 项测试
-node test.js        # 八字引擎 + 渲染 41 项测试
+npm test
+# 共包含 78 个自动化校验用例 (42 个 API 用例 + 36 个排盘引擎用例)
 ```
 
-## API 文档
+---
 
-详见 `SKILL.md`。
+## ⚙️ 环境变量配置
 
-## 支付宝配置
+要启用真实的支付宝扣款与防重校验，请在 Vercel 或本地 `.env` 文件中配置以下变量：
 
-详见 `SETUP_ALIPAY.md`。
+```ini
+# 支付宝核心配置
+ALIPAY_APP_ID=202100xxxxxx         # 支付宝应用 ID
+ALIPAY_SELLER_PID=2088xxxxxx       # 收款商户 PID
+ALIPAY_PRIVATE_KEY=MIIEv...        # 商家应用私钥 (PEM/裸密钥多行文本)
+ALIPAY_PUBLIC_KEY=MIIBI...         # 支付宝公钥 (非应用公钥)
+ALIPAY_SELLER_NAME=八字排盘服务    # 收款商户名称 (选填)
 
-## 部署
-
-```bash
-# 云服务器
-node app.js
-# 或使用 PM2 守护
-npm install -g pm2
-pm2 start app.js --name bazi-app
+# 服务自定义配置
+SERVICE_ID=API_2EBF0208D27248F6   # 服务注册 ID
+BAZI_PRICE=0.10                    # 每次排盘价格（单位：元）
 ```
 
-## 项目结构
+---
+
+## 📖 相关文档
+
+- [SKILL.md](file:///Users/eccstartup/code/codex/alipay/SKILL.md)：AI 智能体 (Agent) 接入本服务的协议标准与伪代码指南。
+- [SETUP_ALIPAY.md](file:///Users/eccstartup/code/codex/alipay/SETUP_ALIPAY.md)：针对商家的支付宝开放平台入驻、密钥生成及回调配置指南。
+
+---
+
+## 📂 项目结构
 
 ```
 alipay/
-├── app.js           # Express 主入口（x402 支付 API）
-├── bazi.js          # 八字计算引擎
-├── alipay.js        # 支付宝支付集成
-├── config.js        # 配置
-├── SKILL.md         # Agent 使用说明
-├── SETUP_ALIPAY.md  # 支付宝配置指南（小白版）
-├── test_x402.js     # x402 全链路测试
-├── test.js          # 八字引擎测试
-└── certs/           # 支付宝密钥（需自行放置）
+├── api/
+│   └── index.js       # Vercel Serverless 部署入口
+├── test/
+│   ├── api.test.js    # x402 协议与签名算法测试
+│   └── bazi.test.js   # 八字排盘引擎测试
+├── app.js             # Express 核心路由与 /skill.md 服务
+├── alipay.js          # 402 账单签名、Payment-Proof 验证与履约回执
+├── bazi.js            # 生辰八字干支排盘、五行、纳音、藏干引擎
+├── config.js          # 环境变量与默认配置管理
+├── SKILL.md           # 智能体技能描述说明书
+├── SETUP_ALIPAY.md    # 商家支付宝配置文档
+├── vercel.json        # Vercel 路由与重写规则
+└── package.json       # 项目依赖及测试脚本
 ```
