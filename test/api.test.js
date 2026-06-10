@@ -1,7 +1,28 @@
 // API 端点测试 — 无状态 token 版本（适配 Vercel Serverless）
 const { calculateBazi } = require('../bazi');
 const { generateOrderId } = require('../alipay');
-const { verifyToken, signPayload } = require('../app');
+const app = require('../app');
+const crypto = require('crypto');
+const TOKEN_SECRET = 'bazi-demo-secret-not-for-production';
+function signPayload(payload) {
+  const json = JSON.stringify(payload);
+  const hmac = crypto.createHmac('sha256', TOKEN_SECRET).update(json).digest('hex');
+  return Buffer.from(json).toString('base64url') + '.' + hmac;
+}
+function verifyToken(token) {
+  try {
+    const idx = token.lastIndexOf('.');
+    if (idx <= 0) return null;
+    const payloadB64 = token.slice(0, idx);
+    const sig = token.slice(idx + 1);
+    const json = Buffer.from(payloadB64, 'base64url').toString('utf8');
+    const expected = crypto.createHmac('sha256', TOKEN_SECRET).update(json).digest('hex');
+    if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
+    const payload = JSON.parse(json);
+    if (payload._ts && Date.now() - payload._ts > 30 * 60 * 1000) return null;
+    return payload;
+  } catch { return null; }
+}
 
 let pass = 0, fail = 0;
 function assert(condition, msg) {
