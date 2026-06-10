@@ -1,18 +1,15 @@
 {
   "name": "alipay-bazi",
-  "version": "1.0.0",
-  "description": "八字查询应用 - 支付宝AI支付集成",
+  "version": "2.0.0",
+  "description": "八字查询 - 支付宝AI收 x402协议",
   "main": "app.js",
   "scripts": {
     "start": "node app.js",
     "dev": "node app.js",
+    "test": "node test/api.test.js && node test/bazi.test.js",
     "deploy:vercel": "npx vercel --prod"
   },
   "dependencies": {
-    "express": "^4.18.2",
-    "serverless-http": "^4.0.0"
-  },
-  "devDependencies": {
-    "supertest": "^7.2.2"
+    "express": "^4.18.2"
   }
 }

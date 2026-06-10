@@ -3,25 +3,23 @@ const config = {
   host: process.env.HOST || '0.0.0.0',
   basePath: process.env.BASE_PATH || '/v1/bazi',
 
-  baziPrice: parseFloat(process.env.BAZI_PRICE || '0.01'),
+  // ====== AI收 x402 配置 ======
+  serviceId: process.env.SERVICE_ID || 'API_2EBF0208D27248F6',
+  baziPrice: process.env.BAZI_PRICE || '0.10',  // 元，字符串
 
-  // ====== 支付宝配置（不配 = 演示模式） ======
   alipay: {
     appId: process.env.ALIPAY_APP_ID || '',
-    // 私钥路径，指向 certs/app_private_key.pem
-    appPrivateKeyPath: process.env.ALIPAY_PRIVATE_KEY_PATH || './certs/app_private_key.pem',
-    // 支付宝公钥路径，指向 certs/alipay_public_key.pem
-    alipayPublicKeyPath: process.env.ALIPAY_PUBLIC_KEY_PATH || './certs/alipay_public_key.pem',
-    // 沙箱或生产网关
-    gateway: process.env.ALIPAY_GATEWAY || 'https://openapi-sandbox.dl.alipaydev.com',
-    // 异步通知地址，需公网可访问
-    notifyUrl: process.env.ALIPAY_NOTIFY_URL || '',
-    // 支付后跳转地址
-    returnUrl: process.env.ALIPAY_RETURN_URL || '',
+    // 商户PID（2088开头）
+    sellerPid: process.env.ALIPAY_SELLER_PID || '',
+    // 应用私钥（用于 seller_signature 签名）
+    // 支持直接传内容或文件路径
+    privateKey: process.env.ALIPAY_PRIVATE_KEY || '',
+    // 支付宝公钥（用于验证回调）
+    alipayPublicKey: process.env.ALIPAY_PUBLIC_KEY || '',
+    // 支付宝网关
+    gateway: process.env.ALIPAY_GATEWAY || 'https://openapi.alipay.com/gateway.do',
   },
-
-  logDir: process.env.LOG_DIR || './logs',
 };
 
-config.isDemoMode = !config.alipay.appId;
+config.isConfigured = !!(config.alipay.appId && config.alipay.sellerPid && config.alipay.privateKey);
 module.exports = config;
