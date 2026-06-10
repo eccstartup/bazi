@@ -19,3 +19,4 @@ Thumbs.db
 
 # lock 文件（可选）
 # package-lock.json
+.vercel

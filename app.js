@@ -1,6 +1,4 @@
 const express = require('express');
-const path = require('path');
-const fs = require('fs');
 const crypto = require('crypto');
 const config = require('./config');
 const { calculateBazi } = require('./bazi');
@@ -8,32 +6,51 @@ const { createPaymentUrl, verifyNotify, verifyReturn, generateOrderId } = requir
 
 const app = express();
 const bp = config.basePath;
-
-if (!fs.existsSync(config.logDir)) fs.mkdirSync(config.logDir, { recursive: true });
 app.use(express.json());
 
-// ====== 订单存储 ======
-const orders = {};
-const TOKEN_EXPIRE_MS = 30 * 60 * 1000; // 30分钟
+// ====== 无状态 Token 方案（适配 Vercel Serverless）======
 
-function createOrderToken() {
-  return crypto.randomBytes(16).toString('hex');
+// TOKEN_SECRET 必须用环境变量，否则每次冷启动随机生成，旧 token 全部失效
+const TOKEN_SECRET = process.env.TOKEN_SECRET || (config.isDemoMode
+  ? 'bazi-demo-secret-not-for-production'
+  : (() => { console.error('[fatal] TOKEN_SECRET not set'); process.exit(1); })());
+
+/**
+ * HMAC 签名 → 返回 base64url(JSON) + "." + hex(HMAC)
+ */
+function signPayload(payload) {
+  const json = JSON.stringify(payload);
+  const hmac = crypto.createHmac('sha256', TOKEN_SECRET).update(json).digest('hex');
+  return Buffer.from(json).toString('base64url') + '.' + hmac;
 }
 
-// 清理过期订单
-setInterval(() => {
-  const now = Date.now();
-  for (const [token, order] of Object.entries(orders)) {
-    if (now - order.createdAt > TOKEN_EXPIRE_MS) delete orders[token];
+/**
+ * 验证并解码 token，篡改或过期返回 null
+ */
+function verifyToken(token) {
+  try {
+    const idx = token.lastIndexOf('.');
+    if (idx <= 0) return null;
+    const payloadB64 = token.slice(0, idx);
+    const sig = token.slice(idx + 1);
+    const json = Buffer.from(payloadB64, 'base64url').toString('utf8');
+    const expected = crypto.createHmac('sha256', TOKEN_SECRET).update(json).digest('hex');
+    if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
+    const payload = JSON.parse(json);
+    // 过期检查：token 创建后 30 分钟有效
+    if (payload._ts && Date.now() - payload._ts > 30 * 60 * 1000) return null;
+    return payload;
+  } catch {
+    return null;
   }
-}, 60 * 1000);
+}
 
 // ====== 核心：查询八字 ======
 
 // POST /v1/bazi/query
 // Agent 调用此接口提交出生信息
-// 成功 → 返回 { code: 0, payment_link: "..." }
-// Agent 把 payment_link 传给 alipay-bot 生成支付短链
+// 成功 → 返回 { code: 0, payment_link: "...", order_token: "..." }
+// token 内编码了查询参数，后续 /result/:token 根据 token 算结果，无需内存存储
 app.post(bp + '/query', async (req, res) => {
   try {
     const { name, gender, year, month, day, hour, minute = 0, second = 0 } = req.body;
@@ -48,28 +65,19 @@ app.post(bp + '/query', async (req, res) => {
       return res.json({ code: 1, message: '无效的日期时间' });
     }
 
-    // 计算八字
-    const bazi = calculateBazi(y, mo, d, h, mi, s, gender || '男');
-
-    // 生成订单
-    const orderToken = createOrderToken();
     const orderNo = generateOrderId();
 
-    orders[orderToken] = {
-      orderNo, status: 'pending', createdAt: Date.now(),
-      input: { name: name || '用户', gender: gender || '男', birth: `${y}年${mo}月${d}日 ${String(h).padStart(2,'0')}:${String(mi).padStart(2,'0')}:${String(s).padStart(2,'0')}` },
-      result: {
-        pillars: bazi.pillars, naYin: bazi.naYin, wuxing: bazi.wuxing,
-        canggan: bazi.canggan, shensha: bazi.shensha,
-        riZhu: bazi.riZhu, shengXiao: bazi.shengXiao, shiChen: bazi.shiChen,
-      },
-    };
+    // 将查询参数编码进 token（无状态方案）
+    const orderToken = signPayload({
+      _ts: Date.now(),
+      name: name || '用户',
+      gender: gender || '男',
+      y, mo, d, h, mi, s,
+      orderNo,
+    });
 
     // 构建 payment_link
-    // 演示模式：直接返回内部支付 URL（点击即成功）
-    // 生产模式：返回支付宝收银台 URL，agent 喂给 alipay-bot trigger-payment-signal
     let paymentLink;
-
     if (config.isDemoMode) {
       paymentLink = `${req.protocol}://${req.get('host')}${bp}/pay/${orderToken}`;
     } else {
@@ -86,7 +94,6 @@ app.post(bp + '/query', async (req, res) => {
       }
     }
 
-    // 返回格式与 Python 示例一致
     res.json({
       code: 0,
       message: 'success',
@@ -102,67 +109,64 @@ app.post(bp + '/query', async (req, res) => {
 });
 
 // GET /v1/bazi/pay/:orderToken
-// 演示模式：直接标记已支付
-// 生产模式：支付宝支付成功后回调此接口标记
+// 演示模式：验证 token 合法性即返回支付成功
+// 生产模式：支付宝支付成功后回调
 app.get(bp + '/pay/:orderToken', (req, res) => {
-  const order = orders[req.params.orderToken];
-  if (!order) return res.status(404).json({ code: 1, message: '订单不存在' });
-
-  order.status = 'paid';
-  order.paidAt = Date.now();
+  const payload = verifyToken(req.params.orderToken);
+  if (!payload) return res.status(404).json({ code: 1, message: '订单不存在或已过期' });
 
   res.json({ code: 0, message: '支付成功', order_token: req.params.orderToken });
 });
 
-// 构建结果数据的公共方法
-function buildResult(order) {
+// ====== 结果查询 ======
+
+/**
+ * 根据 token 构建完整的八字结果数据
+ */
+function buildResultFromPayload(payload) {
+  const bazi = calculateBazi(payload.y, payload.mo, payload.d, payload.h, payload.mi, payload.s, payload.gender);
   return {
-    name: order.input.name,
-    gender: order.input.gender,
-    birth: order.input.birth,
-    ri_zhu: order.result.riZhu,
-    sheng_xiao: order.result.shengXiao,
-    shi_chen: order.result.shiChen,
+    name: payload.name,
+    gender: payload.gender,
+    birth: `${payload.y}年${payload.mo}月${payload.d}日 ${String(payload.h).padStart(2, '0')}:${String(payload.mi).padStart(2, '0')}:${String(payload.s).padStart(2, '0')}`,
+    ri_zhu: bazi.riZhu,
+    sheng_xiao: bazi.shengXiao,
+    shi_chen: bazi.shiChen,
     pillars: {
-      year: { gan: order.result.pillars['年柱'].gan, zhi: order.result.pillars['年柱'].zhi, na_yin: order.result.naYin['年柱'] },
-      month: { gan: order.result.pillars['月柱'].gan, zhi: order.result.pillars['月柱'].zhi, na_yin: order.result.naYin['月柱'] },
-      day: { gan: order.result.pillars['日柱'].gan, zhi: order.result.pillars['日柱'].zhi, na_yin: order.result.naYin['日柱'] },
-      hour: { gan: order.result.pillars['时柱'].gan, zhi: order.result.pillars['时柱'].zhi, na_yin: order.result.naYin['时柱'] },
+      year: { gan: bazi.pillars['年柱'].gan, zhi: bazi.pillars['年柱'].zhi, na_yin: bazi.naYin['年柱'] },
+      month: { gan: bazi.pillars['月柱'].gan, zhi: bazi.pillars['月柱'].zhi, na_yin: bazi.naYin['月柱'] },
+      day: { gan: bazi.pillars['日柱'].gan, zhi: bazi.pillars['日柱'].zhi, na_yin: bazi.naYin['日柱'] },
+      hour: { gan: bazi.pillars['时柱'].gan, zhi: bazi.pillars['时柱'].zhi, na_yin: bazi.naYin['时柱'] },
     },
-    wu_xing: order.result.wuxing,
-    cang_gan: order.result.canggan,
-    shen_sha: order.result.shensha,
+    wu_xing: bazi.wuxing,
+    cang_gan: bazi.canggan,
+    shen_sha: bazi.shensha,
   };
 }
 
 // GET/POST /v1/bazi/result/:orderToken
-// Agent 轮询获取八字结果
 function resultHandler(req, res) {
-  const order = orders[req.params.orderToken];
-  if (!order) return res.status(404).json({ code: 1, message: '订单不存在或已过期' });
-
-  if (order.status !== 'paid') {
-    return res.json({ code: 2, message: '支付未完成', order_token: req.params.orderToken, payment_link: `${req.protocol}://${req.get('host')}${bp}/pay/${req.params.orderToken}` });
+  const payload = verifyToken(req.params.orderToken);
+  if (!payload) {
+    return res.status(404).json({ code: 1, message: '订单不存在或已过期' });
   }
 
   res.json({
     code: 0,
     message: 'success',
-    order_no: order.orderNo,
-    data: buildResult(order),
+    order_no: payload.orderNo,
+    data: buildResultFromPayload(payload),
   });
 }
 
 app.get(bp + '/result/:orderToken', resultHandler);
 app.post(bp + '/result/:orderToken', resultHandler);
 
-// 支付宝异步通知
+// 支付宝异步通知（生产模式需要数据库，此处保持兼容）
 app.post(bp + '/alipay/notify', (req, res) => {
   const data = req.body;
   if (verifyNotify(data) && data.trade_status === 'TRADE_SUCCESS') {
-    for (const [, order] of Object.entries(orders)) {
-      if (order.orderNo === data.out_trade_no) { order.status = 'paid'; break; }
-    }
+    // 生产模式需接入数据库验证订单状态
     res.send('success');
   } else {
     res.send('failure');
@@ -172,9 +176,6 @@ app.post(bp + '/alipay/notify', (req, res) => {
 // 支付宝同步跳转
 app.get(bp + '/alipay/return', (req, res) => {
   if (verifyReturn(req.query)) {
-    for (const [, order] of Object.entries(orders)) {
-      if (order.orderNo === req.query.out_trade_no) { order.status = 'paid'; break; }
-    }
     res.json({ code: 0, message: '支付成功' });
   } else {
     res.json({ code: 1, message: '支付验证失败' });
@@ -183,7 +184,13 @@ app.get(bp + '/alipay/return', (req, res) => {
 
 // 健康检查
 app.get(bp + '/health', (req, res) => {
-  res.json({ status: 'ok', basePath: bp, demo: config.isDemoMode });
+  res.json({
+    status: 'ok',
+    basePath: bp,
+    demo: config.isDemoMode,
+    stateless: true,
+    vercel: !!process.env.VERCEL,
+  });
 });
 
 // 根路径
@@ -192,16 +199,17 @@ app.get('/', (req, res) => res.redirect(bp + '/health'));
 // 404
 app.use((req, res) => res.json({ code: 1, message: '接口不存在' }));
 
-module.exports = { app, config };
+// ====== 导出 & 启动 ======
+module.exports = { app, config, verifyToken, signPayload };
 
-// ====== 启动 ======
+// 本地运行
 if (require.main === module) {
-app.listen(config.port, config.host, () => {
-  console.log(`\n  🔮 AI 八字排盘 - AI收 x402`);
-  console.log(`  ${'='.repeat(34)}`);
-  console.log(`  健康检查: http://localhost:${config.port}${bp}/health`);
-  console.log(`  查询接口: POST http://localhost:${config.port}${bp}/query`);
-  console.log(`  模式: ${config.isDemoMode ? '演示模式 🆓' : '生产模式 💰'}`);
-  console.log(`  ${'='.repeat(34)}\n`);
-});
+  app.listen(config.port, config.host, () => {
+    console.log(`\n  🔮 AI 八字排盘 - AI收 x402`);
+    console.log(`  ${'='.repeat(34)}`);
+    console.log(`  健康检查: http://localhost:${config.port}${bp}/health`);
+    console.log(`  查询接口: POST http://localhost:${config.port}${bp}/query`);
+    console.log(`  模式: ${config.isDemoMode ? '演示模式 🆓 (无状态)' : '生产模式 💰'}`);
+    console.log(`  ${'='.repeat(34)}\n`);
+  });
 }
