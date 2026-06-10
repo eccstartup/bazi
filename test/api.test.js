@@ -32,20 +32,28 @@ console.log('\n--- 2. Payment-Needed header ---');
 
   // 解码验证
   const decoded = JSON.parse(Buffer.from(needed, 'base64url').toString('utf8'));
-  eq(decoded.out_trade_no, 'BAZITEST001', 'out_trade_no 正确');
-  eq(decoded.amount, '0.10', 'amount 正确');
-  eq(decoded.currency, 'CNY', 'currency=CNY');
-  eq(decoded.resource_id, 'API_2EBF0208D27248F6', 'resource_id 正确');
-  eq(decoded.seller_sign_type, 'RSA2', 'seller_sign_type=RSA2');
-  assert(decoded.pay_before.length > 10, 'pay_before 是 ISO 时间');
-  assert(typeof decoded.seller_signature === 'string', 'seller_signature 存在');
+  assert(typeof decoded.protocol === 'object', 'protocol 是对象');
+  assert(typeof decoded.method === 'object', 'method 是对象');
+
+  const proto = decoded.protocol;
+  eq(proto.out_trade_no, 'BAZITEST001', 'out_trade_no 正确');
+  eq(proto.amount, '0.10', 'amount 正确');
+  eq(proto.currency, 'CNY', 'currency=CNY');
+  eq(proto.resource_id, 'API_2EBF0208D27248F6', 'resource_id 正确');
+  eq(proto.seller_sign_type, 'RSA2', 'seller_sign_type=RSA2');
+  assert(proto.pay_before.length > 10, 'pay_before 是 ISO 时间');
+  assert(typeof proto.seller_signature === 'string', 'seller_signature 存在');
+
+  const meth = decoded.method;
+  eq(meth.goods_name, '生辰八字排盘', 'goods_name 正确');
+  eq(meth.service_id, 'API_2EBF0208D27248F6', 'service_id 正确');
 }
 
 // ====== 3. Payment-Needed 签名验证（用测试密钥） ======
 console.log('\n--- 3. 签名字段排序 ---');
 {
   // 验证字段按字典序排列
-  const fields = ['amount', 'currency', 'out_trade_no', 'pay_before', 'resource_id', 'seller_sign_type', 'seller_unique_id'];
+  const fields = ['amount', 'currency', 'goods_name', 'out_trade_no', 'pay_before', 'resource_id', 'seller_id', 'service_id'];
   const sorted = [...fields].sort();
   for (let i = 0; i < fields.length; i++) {
     eq(fields[i], sorted[i], `字段 ${i} 顺序: ${sorted[i]}`);

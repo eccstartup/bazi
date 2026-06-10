@@ -11,6 +11,8 @@ const config = {
     appId: process.env.ALIPAY_APP_ID || '',
     // 商户PID（2088开头）
     sellerPid: process.env.ALIPAY_SELLER_PID || '',
+    // 商户名称
+    sellerName: process.env.ALIPAY_SELLER_NAME || '八字排盘服务',
     // 应用私钥（用于 seller_signature 签名）
     // 支持直接传内容或文件路径
     privateKey: process.env.ALIPAY_PRIVATE_KEY || '',

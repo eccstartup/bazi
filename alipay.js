@@ -43,22 +43,26 @@ function getAlipayPublicKey() {
  * @returns {string} Base64URL 编码的 JSON
  */
 function buildPaymentNeeded(orderNo, amount, resourceId) {
-  const payBefore = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+  // 按照 ISO8601 UTC+8 格式化截止时间
+  const payBefore = new Date(Date.now() + 30 * 60 * 1000 + 8 * 60 * 60 * 1000).toISOString().slice(0, 19) + '+08:00';
+  const goodsName = '生辰八字排盘';
 
-  const params = {
+  // 参与签名的参数（必须包含这 8 个字段）
+  const signParams = {
     amount,
     currency: 'CNY',
+    goods_name: goodsName,
     out_trade_no: orderNo,
     pay_before: payBefore,
     resource_id: resourceId,
-    seller_sign_type: 'RSA2',
-    seller_unique_id: config.alipay.sellerPid,
+    seller_id: config.alipay.sellerPid,
+    service_id: config.serviceId,
   };
 
-  // 签名：按 key 字典序排序，拼接 key=value&key=value
-  const signStr = Object.keys(params)
+  // 按 key 字典序排序，拼接 key=value&key=value
+  const signStr = Object.keys(signParams)
     .sort()
-    .map(k => `${k}=${params[k]}`)
+    .map(k => `${k}=${signParams[k]}`)
     .join('&');
 
   const privateKey = getPrivateKey();
@@ -69,9 +73,26 @@ function buildPaymentNeeded(orderNo, amount, resourceId) {
     signature = sign.sign(privateKey, 'base64');
   }
 
+  // 构造嵌套的 protocol 和 method 返回体
   const payload = {
-    ...params,
-    seller_signature: signature,
+    protocol: {
+      out_trade_no: orderNo,
+      amount,
+      currency: 'CNY',
+      resource_id: resourceId,
+      pay_before: payBefore,
+      seller_signature: signature,
+      seller_sign_type: 'RSA2',
+      seller_unique_id: config.alipay.sellerPid,
+    },
+    method: {
+      seller_name: config.alipay.sellerName,
+      seller_id: config.alipay.sellerPid,
+      seller_app_id: config.alipay.appId,
+      goods_name: goodsName,
+      seller_unique_id_key: 'seller_id',
+      service_id: config.serviceId,
+    }
   };
 
   // Base64URL 编码
