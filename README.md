@@ -76,8 +76,8 @@ BAZI_PRICE=0.10                    # 每次排盘价格（单位：元）
 
 ## 📖 相关文档
 
-- [SKILL.md](file:///Users/eccstartup/code/codex/alipay/SKILL.md)：AI 智能体 (Agent) 接入本服务的协议标准与伪代码指南。
-- [SETUP_ALIPAY.md](file:///Users/eccstartup/code/codex/alipay/SETUP_ALIPAY.md)：针对商家的支付宝开放平台入驻、密钥生成及回调配置指南。
+- [SKILL.md](./SKILL.md)：AI 智能体 (Agent) 接入本服务的协议标准与伪代码指南。
+- [SETUP_ALIPAY.md](./SETUP_ALIPAY.md)：针对商家的支付宝开放平台入驻、密钥生成及回调配置指南。
 
 ---
 
