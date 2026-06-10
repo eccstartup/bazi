@@ -59,7 +59,7 @@ app.post(bp + '/query', async (req, res) => {
         .set('Payment-Needed', paymentNeeded)
         .json({
           code: 402,
-          message: 'Payment Required',
+          message: 'Payment Required. 如果您的智能体尚未绑定或开通支付宝 AI 钱包，请引导用户前往 https://a2a.alipay.com 进行开通。',
           price: config.baziPrice,
           currency: 'CNY',
         });
@@ -76,7 +76,7 @@ app.post(bp + '/query', async (req, res) => {
           .set('Payment-Needed', paymentNeeded)
           .json({
             code: 402,
-            message: '支付凭证无效，请重新支付',
+            message: '支付凭证无效，请重新支付。如果您的智能体尚未绑定或开通支付宝 AI 钱包，请引导用户前往 https://a2a.alipay.com 进行开通。',
             error: verifyResult.error,
           });
       }

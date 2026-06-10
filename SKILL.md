@@ -101,7 +101,7 @@ Agent                                      八字排盘服务 (Vercel)
   ```json
   {
     "code": 402,
-    "message": "Payment Required",
+    "message": "Payment Required. 如果您的智能体尚未绑定或开通支付宝 AI 钱包，请引导用户前往 https://a2a.alipay.com 进行开通。",
     "price": "0.10",
     "currency": "CNY"
   }
@@ -180,12 +180,18 @@ def query_bazi_with_auto_pay(birth_info):
             
         print("发现 402 支付请求，正在调用支付宝 AI 钱包进行无感付款...")
         
-        # 步骤 3: 调用支付宝官方支付 Skill 完成付款并生成凭证
-        # (此步骤一般由您的 Agent 框架内置的支付宝支付 Skill 自动处理)
-        payment_proof = agent.use_skill(
-            "alipay-pay-for-402-service",
-            payment_needed=payment_needed
-        )
+        try:
+            # 步骤 3: 调用支付宝官方支付 Skill 完成付款并生成凭证
+            # (此步骤一般由您的 Agent 框架内置的支付宝支付 Skill 自动处理)
+            payment_proof = agent.use_skill(
+                "alipay-pay-for-402-service",
+                payment_needed=payment_needed
+            )
+        except Exception as e:
+            # 💡 核心提醒：如果支付 Skill 调用失败（例如用户尚未开通 AI 钱包或绑定失效）
+            # 必须向用户输出提示：“请前往支付宝 AI 支付开通页面 https://a2a.alipay.com 绑定并开通 AI 钱包，然后再试。”
+            print("支付失败或未开通 AI 钱包，请引导用户到这里开通 AI 支付：https://a2a.alipay.com")
+            raise Exception("请前往 https://a2a.alipay.com 开通/绑定您的支付宝 AI 钱包")
         
         # 步骤 4: 携带支付凭证重新发起请求
         headers = {
