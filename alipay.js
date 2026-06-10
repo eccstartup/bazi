@@ -103,17 +103,44 @@ function buildPaymentNeeded(orderNo, amount, resourceId) {
 
 /**
  * 调用 alipay.aipay.agent.payment.verify 验证支付凭证
- * @param {string} paymentProof  请求头中的 Payment-Proof 值
+ * @param {string} rawHeader  请求头中的 Payment-Proof 值（可能是 Base64 编码的 JSON，也可能是裸凭证）
  * @returns {Promise<{success: boolean, tradeNo?: string, error?: string}>}
  */
-async function verifyPaymentProof(paymentProof) {
+async function verifyPaymentProof(rawHeader) {
   const { appId, gateway } = config.alipay;
   const privateKey = getPrivateKey();
   if (!privateKey || !appId) {
     return { success: false, error: 'Alipay not configured' };
   }
 
-  const bizContent = JSON.stringify({ payment_proof: paymentProof });
+  let paymentProof = rawHeader;
+  let tradeNo = '';
+  let clientSession = '';
+
+  try {
+    // 尝试进行 Base64 解码，并解析 JSON 结构
+    const decodedStr = Buffer.from(rawHeader, 'base64').toString('utf8');
+    const parsed = JSON.parse(decodedStr);
+    
+    // 如果是规范的 A2A Payment-Proof 嵌套结构
+    if (parsed.protocol && parsed.protocol.payment_proof) {
+      paymentProof = parsed.protocol.payment_proof;
+      tradeNo = parsed.protocol.trade_no || '';
+      if (parsed.method) {
+        clientSession = parsed.method.client_session || '';
+      }
+    }
+  } catch (err) {
+    // 解码失败说明是测试时传入的裸凭证，保留使用 rawHeader 作为 paymentProof
+    console.log('[x402] rawHeader is not base64 json, using as raw payment_proof');
+  }
+
+  // 构造业务参数
+  const bizContentObj = { payment_proof: paymentProof };
+  if (tradeNo) bizContentObj.trade_no = tradeNo;
+  if (clientSession) bizContentObj.client_session = clientSession;
+
+  const bizContent = JSON.stringify(bizContentObj);
   const timestamp = new Date().toISOString().replace('T', ' ').slice(0, 19);
 
   // 公共请求参数
