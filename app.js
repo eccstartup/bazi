@@ -7,6 +7,8 @@ const { createPaymentUrl, verifyNotify, verifyReturn, generateOrderId } = requir
 const app = express();
 const bp = config.basePath;
 app.use(express.json());
+// 支付宝异步通知使用 application/x-www-form-urlencoded 格式
+app.use(express.urlencoded({ extended: false }));
 
 // ====== 无状态 Token 方案 ======
 const TOKEN_SECRET = process.env.TOKEN_SECRET || 'bazi-demo-secret-not-for-production';
@@ -83,10 +85,18 @@ app.post(bp + '/query', async (req, res) => {
   }
 });
 
+// 演示模式：访问 pay 路由时，将已支付的 token 记录在内存 Set 中
+// 注意：Vercel Serverless 函数无持久化内存，生产模式走真实支付宝回调，此处仅用于演示
+const paidTokens = new Set();
+
 // ====== GET /v1/bazi/pay/:orderToken ======
 app.get(bp + '/pay/:orderToken', (req, res) => {
   const payload = verifyToken(req.params.orderToken);
   if (!payload) return res.status(404).json({ code: 1, message: '订单不存在或已过期' });
+  // 演示模式：标记该 token 对应订单已支付
+  if (config.isDemoMode) {
+    paidTokens.add(req.params.orderToken);
+  }
   res.json({ code: 0, message: '支付成功', order_token: req.params.orderToken });
 });
 
@@ -116,6 +126,11 @@ function buildResultFromPayload(payload) {
 function resultHandler(req, res) {
   const payload = verifyToken(req.params.orderToken);
   if (!payload) return res.status(404).json({ code: 1, message: '订单不存在或已过期' });
+  // 演示模式：检查是否已经访问过 pay 路由（即已支付）
+  // 生产模式：支付宝 notify 回调负责确认支付，此处直接放行（notify 已验签）
+  if (config.isDemoMode && !paidTokens.has(req.params.orderToken)) {
+    return res.json({ code: 2, message: '支付未完成，请先完成支付' });
+  }
   res.json({ code: 0, message: 'success', order_no: payload.orderNo, data: buildResultFromPayload(payload) });
 }
 app.get(bp + '/result/:orderToken', resultHandler);
