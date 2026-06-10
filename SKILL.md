@@ -74,7 +74,29 @@ Agent                                      八字排盘服务 (Vercel)
 
 - **HTTP 状态码**: `402 Payment Required`
 - **响应头 (Headers)**:
-  - `Payment-Needed`: 一个 Base64URL 编码的 JSON 字符串（包含交易单号、金额、收款人商户ID、商户签名等，直接传递给支付宝钱包插件即可）。
+  - `Payment-Needed`: 一个 Base64URL 编码的 JSON 字符串。解码后的数据包含完整的 `protocol` 和 `method` 双层结构，可以直接传递给支付宝钱包插件或 SDK。其解密后的结构示例如下：
+    ```json
+    {
+      "protocol": {
+        "out_trade_no": "BAZI...",
+        "amount": "0.10",
+        "currency": "CNY",
+        "resource_id": "API_2EBF0208D27248F6",
+        "pay_before": "2026-06-10T15:02:52+08:00",
+        "seller_signature": "MIIEv...",
+        "seller_sign_type": "RSA2",
+        "seller_unique_id": "2088..."
+      },
+      "method": {
+        "seller_name": "八字排盘服务",
+        "seller_id": "2088...",
+        "seller_app_id": "2021...",
+        "goods_name": "生辰八字排盘",
+        "seller_unique_id_key": "seller_id",
+        "service_id": "API_2EBF0208D27248F6"
+      }
+    }
+    ```
 - **响应体 (JSON)**:
   ```json
   {
