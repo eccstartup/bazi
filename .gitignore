@@ -1,0 +1,21 @@
+# 依赖
+node_modules/
+
+# 密钥 & 环境
+.env
+certs/
+
+# 日志
+logs/
+*.log
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# lock 文件（可选）
+# package-lock.json
