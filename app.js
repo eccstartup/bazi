@@ -126,8 +126,10 @@ app.get('/skill.md', (req, res) => {
 });
 app.get('/SKILL.md', (req, res) => res.redirect('/skill.md'));
 
-// 根路径
-app.get('/', (req, res) => res.redirect(bp + '/health'));
+// 根路径 - 提供可视化说明与测试页
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
 
 // 404
 app.use((req, res) => res.json({ code: 1, message: '接口不存在' }));
