@@ -1,4 +1,6 @@
 const express = require('express');
+const path = require('path');
+const fs = require('fs');
 const config = require('./config');
 const { calculateBazi } = require('./bazi');
 const { generateOrderId, buildPaymentNeeded, verifyPaymentProof, confirmFulfillment } = require('./alipay');
@@ -112,6 +114,17 @@ app.get(bp + '/health', (req, res) => {
     configured: config.isConfigured,
   });
 });
+
+// 提供 SKILL.md 接口给 Agent 接入
+app.get('/skill.md', (req, res) => {
+  const filePath = path.join(__dirname, 'SKILL.md');
+  if (fs.existsSync(filePath)) {
+    res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
+    return res.sendFile(filePath);
+  }
+  res.status(404).json({ code: 1, message: 'SKILL.md file not found' });
+});
+app.get('/SKILL.md', (req, res) => res.redirect('/skill.md'));
 
 // 根路径
 app.get('/', (req, res) => res.redirect(bp + '/health'));
