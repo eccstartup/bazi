@@ -59,7 +59,8 @@ app.post(bp + '/query', async (req, res) => {
 
     let paymentLink;
     if (config.isDemoMode) {
-      paymentLink = `${req.protocol}://${req.get('host')}${bp}/pay/${orderToken}`;
+      const proto = req.get('x-forwarded-proto') || req.protocol;
+      paymentLink = `${proto}://${req.get('host')}${bp}/pay/${orderToken}`;
     } else {
       try {
         const result = await createPaymentUrl(
