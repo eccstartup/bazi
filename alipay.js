@@ -8,6 +8,8 @@ const config = require('./config');
 const REQUEST_TIMEOUT_MS = 15000;
 // Payment-Proof 最大长度（防止恶意超长输入）
 const MAX_PROOF_LENGTH = 10000;
+// 支付宝响应最大长度（防止超大响应导致 OOM）
+const MAX_RESPONSE_SIZE = 1024 * 1024;
 
 // ====== 工具函数 ======
 
@@ -356,7 +358,16 @@ function postToAlipay(gatewayUrl, params) {
 
     const req = transport.request(options, (res) => {
       let data = '';
-      res.on('data', chunk => data += chunk);
+      let totalSize = 0;
+      res.on('data', chunk => {
+        totalSize += chunk.length;
+        if (totalSize > MAX_RESPONSE_SIZE) {
+          res.destroy();
+          reject(new Error('Alipay response exceeded maximum size'));
+          return;
+        }
+        data += chunk;
+      });
       res.on('end', () => {
         try { resolve({ parsed: JSON.parse(data), raw: data }); }
         catch { reject(new Error('Invalid JSON from Alipay')); }

@@ -7,7 +7,62 @@ const { generateOrderId, buildPaymentNeeded, verifyPaymentProof, confirmFulfillm
 
 const app = express();
 const bp = config.basePath;
-app.use(express.json());
+// ====== 安全中间件 ======
+
+// 请求体大小限制（防止超大 body 攻击）
+app.use(express.json({ limit: '10kb' }));
+
+// 基础安全响应头
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  next();
+});
+
+// 简易内存 Rate Limiter（滑动窗口，每 IP 每分钟最多 30 次请求）
+// 注意：Vercel 等 Serverless 环境下内存不持久，生产环境建议换用 Redis
+const RATE_LIMIT_WINDOW_MS = 60 * 1000;
+const RATE_LIMIT_MAX = 30;
+const rateLimitStore = new Map();
+
+function rateLimiter(req, res, next) {
+  const ip = req.ip || req.socket?.remoteAddress || 'unknown';
+  const now = Date.now();
+  let record = rateLimitStore.get(ip);
+
+  if (!record) {
+    record = [];
+    rateLimitStore.set(ip, record);
+  }
+
+  // 移除窗口外的记录
+  while (record.length > 0 && record[0] <= now - RATE_LIMIT_WINDOW_MS) {
+    record.shift();
+  }
+
+  if (record.length >= RATE_LIMIT_MAX) {
+    return res.status(429).json({ code: 429, message: '请求过于频繁，请稍后再试' });
+  }
+
+  record.push(now);
+  next();
+}
+
+// 定期清理过期记录（每 5 分钟）
+const _cleanupInterval = setInterval(() => {
+  const now = Date.now();
+  for (const [ip, record] of rateLimitStore) {
+    while (record.length > 0 && record[0] <= now - RATE_LIMIT_WINDOW_MS) {
+      record.shift();
+    }
+    if (record.length === 0) rateLimitStore.delete(ip);
+  }
+}, 5 * 60 * 1000);
+if (_cleanupInterval.unref) _cleanupInterval.unref(); // 允许进程正常退出
+
+// 对 API 路径应用 rate limiting
+app.use(bp, rateLimiter);
 
 // ====== 八字结果构建 ======
 function buildResult(name, gender, y, mo, d, h, mi, s) {
@@ -38,13 +93,13 @@ app.post(bp + '/query', async (req, res) => {
 
     // 参数校验
     if (!year || !month || !day || hour === undefined) {
-      return res.json({ code: 1, message: '缺少必填参数 year, month, day, hour' });
+      return res.status(400).json({ code: 1, message: '缺少必填参数 year, month, day, hour' });
     }
 
     const y = +year, mo = +month, d = +day, h = +hour, mi = +minute, s = +second;
     const birthDate = new Date(y, mo - 1, d, h, mi, s);
     if (birthDate.getFullYear() !== y || birthDate.getMonth() + 1 !== mo || birthDate.getDate() !== d) {
-      return res.json({ code: 1, message: '无效的日期时间' });
+      return res.status(400).json({ code: 1, message: '无效的日期时间' });
     }
 
     // ====== x402 协议：检查 Payment-Proof ======
@@ -83,7 +138,6 @@ app.post(bp + '/query', async (req, res) => {
           .json({
             code: 402,
             message: '支付凭证无效，请重新支付。如果您的智能体尚未绑定或开通支付宝 AI 钱包，请引导用户前往 https://a2a.alipay.com 进行开通。',
-            error: verifyResult.error,
           });
       }
 
@@ -107,7 +161,7 @@ app.post(bp + '/query', async (req, res) => {
 
   } catch (err) {
     console.error('[query] error:', err.message);
-    res.json({ code: 1, message: '服务器内部错误' });
+    res.status(500).json({ code: 1, message: '服务器内部错误' });
   }
 });
 
@@ -138,7 +192,7 @@ app.get('/', (req, res) => {
 });
 
 // 404
-app.use((req, res) => res.json({ code: 1, message: '接口不存在' }));
+app.use((req, res) => res.status(404).json({ code: 1, message: '接口不存在' }));
 
 module.exports = app;
 
