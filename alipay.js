@@ -140,7 +140,7 @@ function buildPaymentNeeded(orderNo, amount, resourceId) {
   const payBefore = formatBeijingTime(new Date(Date.now() + 30 * 60 * 1000), 'iso');
   const goodsName = '生辰八字排盘';
 
-  // 参与签名的参数（seller_unique_id 与 protocol 保持一致）
+  // 参与签名的参数（按支付宝官方文档，签名字段使用 seller_id）
   const signParams = {
     amount,
     currency: 'CNY',
@@ -148,7 +148,7 @@ function buildPaymentNeeded(orderNo, amount, resourceId) {
     out_trade_no: orderNo,
     pay_before: payBefore,
     resource_id: resourceId,
-    seller_unique_id: config.alipay.sellerPid,
+    seller_id: config.alipay.sellerPid,
     service_id: config.serviceId,
   };
 
