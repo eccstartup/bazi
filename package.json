@@ -10,6 +10,7 @@
     "deploy:vercel": "npx vercel --prod"
   },
   "dependencies": {
-    "express": "^4.18.2"
+    "express": "^4.18.2",
+    "lunar-javascript": "^1.7.7"
   }
 }

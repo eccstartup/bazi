@@ -1,4 +1,5 @@
 // ======== 八字计算引擎 ========
+const { Solar } = require('lunar-javascript');
 
 const TIAN_GAN = ['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛', '壬', '癸'];
 const DI_ZHI   = ['子', '丑', '寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥'];
@@ -96,6 +97,7 @@ function getNaYin(gan, zhi) {
   return NA_YIN_MAP[gan + zhi] || '';
 }
 
+// 导出此方法，以防其他测试或组件需要
 function getCangGan(zhi) {
   return CANG_GAN[zhi] || [];
 }
@@ -112,14 +114,25 @@ function getShenSha(zhi, dayZhi) {
 }
 
 function calculateBazi(year, month, day, hour, minute = 0, second = 0, gender = '男') {
-  const y = getYearGanZhi(year);
-  const m = getMonthGanZhi(year, month);
-  const d = getDayGanZhi(year, month, day);
-  const h = getHourGanZhi(d.gan, hour);
-  const sc = getShiChen(hour);
+  const yNum = Number(year);
+  const mNum = Number(month);
+  const dNum = Number(day);
+  const hNum = Number(hour);
+  const miNum = Number(minute);
+  const sNum = Number(second);
 
-  const pillars = { 年柱:y, 月柱:m, 日柱:d, 时柱:h };
-  const names = ['年柱','月柱','日柱','时柱'];
+  const date = new Date(yNum, mNum - 1, dNum, hNum, miNum, sNum);
+  const solar = Solar.fromDate(date);
+  const lunar = solar.getLunar();
+  const eightChar = lunar.getEightChar();
+
+  const y = { gan: eightChar.getYearGan(), zhi: eightChar.getYearZhi() };
+  const m = { gan: eightChar.getMonthGan(), zhi: eightChar.getMonthZhi() };
+  const d = { gan: eightChar.getDayGan(), zhi: eightChar.getDayZhi() };
+  const h = { gan: eightChar.getTimeGan(), zhi: eightChar.getTimeZhi() };
+
+  const pillars = { 年柱: y, 月柱: m, 日柱: d, 时柱: h };
+  const names = ['年柱', '月柱', '日柱', '时柱'];
   const naYin = {};
   for (const n of names) naYin[n] = getNaYin(pillars[n].gan, pillars[n].zhi);
 
@@ -142,7 +155,7 @@ function calculateBazi(year, month, day, hour, minute = 0, second = 0, gender = 
     riGan: d.gan,
     riGanWuXing: getWuXing(d.gan),
     shengXiao: SHENG_XIAO[y.zhi] || '',
-    shiChen: sc.name,
+    shiChen: h.zhi,
     textLines: [
       '【四柱八字】',
       `  ${names.map(n => pillars[n].gan).join('  ')}`,
@@ -151,7 +164,7 @@ function calculateBazi(year, month, day, hour, minute = 0, second = 0, gender = 
       `纳音: ${names.map(n => naYin[n]).join('  ')}`,
       '',
       `【日主】${d.gan}（${getWuXing(d.gan)}）`,
-      `【生肖】${SHENG_XIAO[y.zhi] || ''}  【时辰】${sc.name}时`,
+      `【生肖】${SHENG_XIAO[y.zhi] || ''}  【时辰】${h.zhi}时`,
       '',
       '【藏干】',
       ...names.map(n => `  ${n}: ${(canggan[n[0]] || []).join(' ') || '无'}`),

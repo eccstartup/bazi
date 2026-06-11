@@ -78,31 +78,31 @@ console.log('\n--- 3. 签名字段排序 ---');
 console.log('\n--- 4. 八字计算 ---');
 {
   const bazi = calculateBazi(2000, 1, 1, 8, 0, 0, '男');
-  eq(bazi.riZhu, '甲（木）', 'riZhu=甲木');
+  eq(bazi.riZhu, '戊（土）', 'riZhu=戊土');
   eq(bazi.shiChen, '辰', '时辰=辰');
-  eq(bazi.shengXiao, '龙', '生肖=龙');
-  eq(bazi.naYin['年柱'], '白蜡金', '纳音年柱=白蜡金');
+  eq(bazi.shengXiao, '兔', '生肖=兔');
+  eq(bazi.naYin['年柱'], '城头土', '纳音年柱=城头土');
 }
 
 // ====== 5. 不同日期八字 ======
 console.log('\n--- 5. 不同日期八字 ---');
 {
-  eq(calculateBazi(1986, 5, 26, 7, 0, 0, '男').riZhu, '丙（火）', '1986-05-26→丙火');
-  eq(calculateBazi(1999, 12, 25, 19, 0, 0, '男').riZhu, '丁（火）', '1999-12-25→丁火');
-  eq(calculateBazi(2025, 6, 10, 12, 0, 0, '男').riZhu, '丙（火）', '2025-06-10→丙火');
+  eq(calculateBazi(1986, 5, 26, 7, 0, 0, '男').riZhu, '庚（金）', '1986-05-26→庚金');
+  eq(calculateBazi(1999, 12, 25, 19, 0, 0, '男').riZhu, '辛（金）', '1999-12-25→辛金');
+  eq(calculateBazi(2025, 6, 10, 12, 0, 0, '男').riZhu, '庚（金）', '2025-06-10→庚金');
 }
 
 // ====== 6. 结果数据结构 ======
 console.log('\n--- 6. 结果数据结构 ---');
 {
   const bazi = calculateBazi(2000, 1, 1, 8, 0, 0, '男');
-  eq(bazi.pillars['年柱'].gan, '庚', '年干=庚');
-  eq(bazi.pillars['年柱'].zhi, '辰', '年支=辰');
-  eq(bazi.pillars['月柱'].gan, '戊', '月干=戊');
-  eq(bazi.pillars['日柱'].gan, '甲', '日干=甲');
-  eq(bazi.pillars['时柱'].gan, '戊', '时干=戊');
-  eq(bazi.wuxing['时'], '土土', 'wu_xing 时=土土');
-  eq(bazi.canggan['日'][0], '水癸', 'cang_gan 日[0]=水癸');
+  eq(bazi.pillars['年柱'].gan, '己', '年干=己');
+  eq(bazi.pillars['年柱'].zhi, '卯', '年支=卯');
+  eq(bazi.pillars['月柱'].gan, '丙', '月干=丙');
+  eq(bazi.pillars['日柱'].gan, '戊', '日干=戊');
+  eq(bazi.pillars['时柱'].gan, '丙', '时干=丙');
+  eq(bazi.wuxing['时'], '火土', 'wu_xing 时=火土');
+  eq(bazi.canggan['日'][0], '火丁', 'cang_gan 日[0]=火丁');
 }
 
 // ====== 7. 性别不影响排盘 ======
